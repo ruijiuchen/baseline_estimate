@@ -20,3 +20,6 @@ Examples of all the methods to estimate Gaussian peaks on linear and Lorentzian 
 
 ## License
 This repository is licensed under the **GNU GPLv3**.
+
+## Cite
+Q. Wang, X.L Yan, et al. NUCL SCI TECH, 33: 148 (2022). doi: [10.1007/s41365-022-01132-9](https://link.springer.com/10.1007/s41365-022-01132-9)
