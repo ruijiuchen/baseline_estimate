@@ -6,7 +6,12 @@ import math, sys, warnings
 import scipy.special as sp
 from scipy import sparse
 from scipy.sparse.linalg import spsolve
-
+import argparse
+import os
+import uproot
+import ROOT
+import awkward as ak
+from tqdm import tqdm
 def binom(n, k):
     '''
     effective fraction coefficients for the filter
@@ -294,33 +299,108 @@ class PLS(object):
             w = wt
         return z
 
-    def BrPLS(self, l, ratio=1e-6, nitermax=50):
+    def BrPLS(self, l, ratio=1e-6, nitermax=50, z_init=None, w_init=None):
         '''
         Bayesian Asymmetrically reweighted penalized least squares (BrPLS)
-        @ Q. Wang. Phys. Rev. E. (2022) (to be submitted)
+        @ Q. Wang, X.L Yan, et al. NUCL SCI TECH, 33: 148 (2022). doi: 10.1007/s41365-022-01132-9
         ---
         l:          parameter for smoothness
         ratio:      parameter for termination condition ratio 
-        nitermax:   max number of iterations, default to 10
+        nitermax:   max number of iterations
+        z_init:     optional, initial value of baseline (np.array), can speed up convergence
         ---
         return
         z:          baseline spectrum
         '''
         L, beta = len(self.data), 0.5
-        D = sparse.diags([1,-2,1], [0,-1,-2], shape=(L, L-2))
+        D = sparse.diags([1, -2, 1], [0, -1, -2], shape=(L, L-2))
         D = l * D.dot(D.transpose())
-        w, z = np.ones(L), self.data.copy()
+        z = z_init.copy() if z_init is not None else self.data.copy()
+        w = w_init.copy() if w_init is not None else np.ones(L)
         warnings.filterwarnings("ignore")
-        for i in range(nitermax):
-            for i in range(nitermax):
+        iterations = 0
+        for _ in range(nitermax):
+            for _ in range(nitermax):
+                iterations = iterations + 1
                 W = sparse.spdiags(w, 0, L, L)
                 Z = W + D
-                zt = spsolve(Z, w*self.data)
+                zt = spsolve(Z, w * self.data)
+                if np.sqrt(np.sum((z - zt)**2) / np.sum(z**2)) < ratio:
+                    break
                 d = self.data - zt
-                d_m, d_sigma = np.mean(d[d>0]), np.sqrt(np.mean(d[d<0]**2)) 
-                w = 1 / (1 + beta / (1 - beta) * np.sqrt(np.pi / 2) * d_sigma / d_m * (1 + sp.erf((d / d_sigma - d_sigma / d_m) / np.sqrt(2))) * np.exp((d / d_sigma - d_sigma / d_m)**2 / 2))
-                if np.sqrt(np.sum((z - zt)**2) / np.sum(z**2)) < ratio: break
+                d_m = np.mean(d[d > 0]) if np.any(d > 0) else 1e-6
+                d_sigma = np.sqrt(np.mean(d[d < 0]**2)) if np.any(d < 0) else 1e-6
+                w = 1 / (1 + beta / (1 - beta) * np.sqrt(np.pi / 2) * d_sigma / d_m *
+                         (1 + sp.erf((d / d_sigma - d_sigma / d_m) / np.sqrt(2))) *
+                         np.exp((d / d_sigma - d_sigma / d_m)**2 / 2))
+                
                 z = zt
-            if np.abs(beta + np.mean(w) - 1.) < ratio: break
+            if np.abs(beta + np.mean(w) - 1.) < ratio:
+                break
             beta = 1 - np.mean(w)
-        return z
+        return z,w
+        
+# 在 main() 函数最后替换 uproot 保存部分：
+def save_TH2_to_root(result_z, x_edges, y_edges, outroot, outhistname):
+    n_bins_x = len(x_edges) - 1
+    n_bins_y = len(y_edges) - 1
+
+    hist = ROOT.TH2D(outhistname, outhistname, n_bins_x, x_edges, n_bins_y, y_edges)
+
+    for ix in range(n_bins_x):
+        for iy in range(n_bins_y):
+            value = result_z[ix][iy]  # 注意：numpy 的 iy, ix 要转换为 TH2 的 bin
+            hist.SetBinContent(ix + 1, iy + 1, value)
+
+    fout = ROOT.TFile(outroot, "RECREATE")
+    hist.Write()
+    fout.Close()
+    print(f"TH2 histogram saved to {outroot} as '{outhistname}'")
+    
+def main():
+    parser = argparse.ArgumentParser(description="Remove baseline from each projection of a TH2 histogram.")
+    parser.add_argument("--filename", required=True, help="Input ROOT file with TH2.")
+    parser.add_argument("--histname", default="h2", help="Name of TH2 object.")
+    parser.add_argument("--l", type=float, default=1e6, help="Smoothness param for BrPLS.")
+    parser.add_argument("--ratio", type=float, default=1e-6, help="Ratio param for BrPLS.")
+    parser.add_argument("--outroot", default="output.root", help="Output ROOT file name.")
+    parser.add_argument("--outhistname", default="h2_baseline_removed", help="Name for new TH2 histogram.")
+    parser.add_argument("--maxbins", type=int, default=-1, help="Maximum number of x-bins to process. -1 for all.")
+    args = parser.parse_args()
+    # 输出 BrPLS 信息
+    print("""
+    Bayesian Asymmetrically Reweighted Penalized Least Squares (BrPLS)
+        @ Q. Wang, X.L Yan, et al. NUCL SCI TECH, 33: 148 (2022). doi: 10.1007/s41365-022-01132-9
+        ---
+        l:          parameter for smoothness
+        ratio:      parameter for termination condition ratio 
+        nitermax:   max number of iterations, default to 10
+    """)
+    if not os.path.exists(args.filename):
+        raise FileNotFoundError(f"File not found: {args.filename}")
+
+    with uproot.open(args.filename) as file:
+        if args.histname not in file:
+            raise KeyError(f"Histogram '{args.histname}' not found in {args.filename}")
+        h2 = file[args.histname]
+        z, x_edges, y_edges = h2.to_numpy()
+    n_bins_x, n_bins_y = z.shape[0], z.shape[1]
+    result_z = np.zeros_like(z)
+    maxbins = args.maxbins if args.maxbins > 0 else n_bins_x
+
+    z_init = None  # 初始化第一次的本底为空
+    w_init = None
+    for iy in tqdm(range(min(n_bins_y, maxbins)), desc="Processing frames"):
+        psd = z[:, iy]  # 当前帧频谱
+        estimator = NONPARAMS_EST(psd)
+        baseline,weight = estimator.pls('BrPLS', l=args.l, ratio=args.ratio, z_init=z_init,w_init=w_init)  # 传入上次的本底
+        psd_removed = psd - baseline
+        result_z[:, iy] = psd_removed
+        z_init = baseline.copy()  # 更新本底为下一次迭代的初始值
+        w_init = weight.copy()
+    trimmed_result_z = result_z[:, :maxbins]
+    trimmed_y_edges = y_edges[:maxbins + 1]
+    save_TH2_to_root(trimmed_result_z, x_edges, trimmed_y_edges, args.outroot, args.outhistname)
+
+if __name__ == "__main__":
+    main()

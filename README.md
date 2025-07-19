@@ -1,25 +1,22 @@
-# baseline-estimate
-This repo is for baseline correction.
-Both parameter estimation and non-parameter estimation of the baseline are available.
+# Quick guide of queqiao
+1. Download the code from github with command:
 
-## Prerequisites
-- `Python 3`
-- `numpy`, `scipy`, `math` (only required for non-parameter estimation's SNIP methods), `nlopt` (only required for parameter estimation)
+   	    git clone  https://github.com/ruijiuchen/queqiao.git
 
-## Usage
-Class `NONPARAMS_EST` in `nonparams_est.py` provides two series of methods.
-- `snip`: Sensitive Nonlinear Iterative Peak (SNIP) algorithms.
-- `pls`: Reweighted Penalized Least Squares (PLS) algorithms. the AsLS, airPLS, arPLS, BrPLS methods are available. 
+2. Use the following command to install the dependencies listed in the "requirements.txt" file:
 
-Class `PARAMES_EST` in `params_est.py` provides parameter baseline method based on Bayesian theorem.
-- `ESTFUNC`: function of the baseline to be estimated. default: linear, quadratic, cubic, Lorentzian, Landau-Gaussian (`pylandau` required). Also user can define custom functions.
-- `BAYESIAN`: main function for baseline estimation.
+       pip install -r requirements.txt
+   
+This will install all the required packages specified in the requirements.txt file.
 
-## Example
-Examples of all the methods to estimate Gaussian peaks on linear and Lorentzian baseline are shown in `test.py`.
+3. Install queqiao program via:
 
-## License
-This repository is licensed under the **GNU GPLv3**.
+   	   pip install .
 
-## Cite
-Q. Wang, X.L Yan, et al. NUCL SCI TECH, 33: 148 (2022). doi: [10.1007/s41365-022-01132-9](https://link.springer.com/10.1007/s41365-022-01132-9)
+4. Execute the code:
+Before execute the code, make sure the paths in the file "pathsettings.toml" are correct.
+
+       queqiao pathsettings.toml
+
+
+test# baseline_estimate
