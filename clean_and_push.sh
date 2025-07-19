@@ -6,7 +6,7 @@ rm -rf build/ dist/ rionid.egg-info/ __pycache__/ baseline_estimate/__pycache__/
 
 # Step 2: 添加文件到 Git
 echo "📁 Staging source files..."
-git add .
+git add -A
 
 # Step 3: 提交改动
 read -p "📝 Enter commit message: " msg
@@ -14,6 +14,6 @@ git commit -m "$msg"
 
 # Step 4: 推送到 GitHub
 echo "⬆️  Pushing to GitHub..."
-git push origin master
+git push origin main
 
 echo "✅ Done."
