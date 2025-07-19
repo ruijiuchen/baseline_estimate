@@ -16,7 +16,7 @@ This will install all the required packages specified in the requirements.txt fi
 4. Execute the code:
 Before execute the code, make sure the paths in the file "pathsettings.toml" are correct.
 
-       baseline_estimate pathsettings.toml
+       baseline_estimate --filename From20250705_05-20-00_08-00-00.root --histname spectrogram --l 10000  --ratio 1e-6 --outroot baseline_corrected.root --outhistname h2_baseline_removed
 
 
 test# baseline_estimate
